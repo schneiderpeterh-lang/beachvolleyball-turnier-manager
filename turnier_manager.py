@@ -2,7 +2,7 @@ import streamlit as st
 from fpdf import FPDF
 import json
 import gspread
-from google.auth.credential_import_gserviceaccount import Credentials
+from google.oauth2.service_account import Credentials
 
 # --- GOOGLE SHEETS SYSTEM LOGIK ---
 def get_gspread_client():
@@ -148,7 +148,6 @@ if client:
     except Exception as e:
         st.error(f"Google Sheet 'Beachvolleyball_Turnier' nicht gefunden. Bitte Freigabe prüfen! Fehler: {e}")
 
-# Basiseinstellungen laden falls Cloud leer
 if 'teilnehmer' not in st.session_state: st.session_state.teilnehmer = [f"Spieler {i} ({i})" for i in range(1, 21)]
 if 'spielplan_r1' not in st.session_state: st.session_state.spielplan_r1 = None
 if 'spielplan_r2' not in st.session_state: st.session_state.spielplan_r2 = None
@@ -184,7 +183,7 @@ if uploaded_file is not None:
             importierte_namen.append(anzeige_name)
         if len(importierte_namen) == 20: 
             st.session_state.teilnehmer = importierte_namen
-            st.sidebar.success("Setzliste lokal geladen. Klicke auf 'Turnier neu starten' zum Hochladen.")
+            st.sidebar.success("Setzliste lokal geladen. Klicke auf 'Reset' zum Hochladen.")
     except Exception as e: st.sidebar.error(f"Fehler: {e}")
 
 if st.sidebar.button("📋 Turnier neu starten / Reset"):
@@ -195,7 +194,6 @@ if st.sidebar.button("📋 Turnier neu starten / Reset"):
     st.session_state.platz_17_bis_20 = []
     st.session_state.rangliste_r1 = None
     st.session_state.rangliste_r2 = None
-    # Bereinige alte Ergebnisse
     for k in list(st.session_state.keys()):
         if k.startswith("r1_") or k.startswith("r2_") or k.startswith("r3_"):
             del st.session_state[k]
@@ -241,10 +239,15 @@ if st.session_state.spielplan_r1:
                         s2_t1 = st.session_state[f"{key_pfx}_s2_t1"]
                         s2_t2 = st.session_state[f"{key_pfx}_s2_t2"]
                         
-                        if s1_t1 > s1_t2: for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
-                        elif s1_t2 > s1_t1: for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
-                        if s2_t1 > s2_t2: for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
-                        elif s2_t2 > s2_t1: for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
+                        if s1_t1 > s1_t2:
+                            for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
+                        elif s1_t2 > s1_t1:
+                            for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
+                        
+                        if s2_t1 > s2_t2:
+                            for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
+                        elif s2_t2 > s2_t1:
+                            for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
                         
                         for p in spiel["Team 1 Spieler"]: stats[p]["punkte"] += (s1_t1 + s2_t1); stats[p]["diff"] += ((s1_t1 + s2_t1) - (s1_t2 + s2_t2))
                         for p in spiel["Team 2 Spieler"]: stats[p]["punkte"] += (s1_t2 + s2_t2); stats[p]["diff"] += ((s1_t2 + s2_t2) - (s1_t1 + s2_t1))
@@ -306,10 +309,15 @@ if st.session_state.spielplan_r2:
                         s2_t1 = st.session_state[f"{key_pfx}_s2_t1"]
                         s2_t2 = st.session_state[f"{key_pfx}_s2_t2"]
                         
-                        if s1_t1 > s1_t2: for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
-                        elif s1_t2 > s1_t1: for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
-                        if s2_t1 > s2_t2: for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
-                        elif s2_t2 > s2_t1: for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
+                        if s1_t1 > s1_t2:
+                            for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
+                        elif s1_t2 > s1_t1:
+                            for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
+                        
+                        if s2_t1 > s2_t2:
+                            for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
+                        elif s2_t2 > s2_t1:
+                            for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
                         
                         for p in spiel["Team 1 Spieler"]: stats[p]["punkte"] += (s1_t1 + s2_t1); stats[p]["diff"] += ((s1_t1 + s2_t1) - (s1_t2 + s2_t2))
                         for p in spiel["Team 2 Spieler"]: stats[p]["punkte"] += (s1_t2 + s2_t2); stats[p]["diff"] += ((s1_t2 + s2_t2) - (s1_t1 + s2_t1))
@@ -364,10 +372,15 @@ if st.session_state.spielplan_r3:
                         s2_t1 = st.session_state[f"{key_pfx}_s2_t1"]
                         s2_t2 = st.session_state[f"{key_pfx}_s2_t2"]
                         
-                        if s1_t1 > s1_t2: for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
-                        elif s1_t2 > s1_t1: for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
-                        if s2_t1 > s2_t2: for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
-                        elif s2_t2 > s2_t1: for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
+                        if s1_t1 > s1_t2:
+                            for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
+                        elif s1_t2 > s1_t1:
+                            for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
+                        
+                        if s2_t1 > s2_t2:
+                            for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
+                        elif s2_t2 > s2_t1:
+                            for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
                         
                         for p in spiel["Team 1 Spieler"]: stats[p]["punkte"] += (s1_t1 + s2_t1); stats[p]["diff"] += ((s1_t1 + s2_t1) - (s1_t2 + s2_t2))
                         for p in spiel["Team 2 Spieler"]: stats[p]["punkte"] += (s1_t2 + s2_t2); stats[p]["diff"] += ((s1_t2 + s2_t2) - (s1_t1 + s2_t1))
