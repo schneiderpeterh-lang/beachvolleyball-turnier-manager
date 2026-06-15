@@ -94,9 +94,6 @@ if 'teilnehmer' not in st.session_state: st.session_state.teilnehmer = [f"Spiele
 if 'spielplan_r1' not in st.session_state: st.session_state.spielplan_r1 = None
 if 'spielplan_r2' not in st.session_state: st.session_state.spielplan_r2 = None
 if 'spielplan_r3' not in st.session_state: st.session_state.spielplan_r3 = None
-if 'ergebnisse_r1' not in st.session_state: st.session_state.ergebnisse_r1 = {}
-if 'ergebnisse_r2' not in st.session_state: st.session_state.ergebnisse_r2 = {}
-if 'ergebnisse_r3' not in st.session_state: st.session_state.ergebnisse_r3 = {}
 if 'endstand_tabelle' not in st.session_state: st.session_state.endstand_tabelle = None
 if 'platz_17_bis_20' not in st.session_state: st.session_state.platz_17_bis_20 = []
 if 'rangliste_r1' not in st.session_state: st.session_state.rangliste_r1 = None
@@ -104,7 +101,7 @@ if 'rangliste_r2' not in st.session_state: st.session_state.rangliste_r2 = None
 
 # --- 3. BENUTZEROBERFLAECHE (UI) ---
 st.set_page_config(layout="wide")
-st.title("🏐 TuB - King of the Beach - Turnier Manager")
+st.title("🏐 King of the Beach - Turnier Manager")
 
 # -- SIDEBAR --
 st.sidebar.header("Turniersteuerung")
@@ -131,9 +128,6 @@ if st.sidebar.button("📋 Turnier neu starten"):
     st.session_state.spielplan_r3 = None
     st.session_state.endstand_tabelle = None
     st.session_state.platz_17_bis_20 = []
-    st.session_state.ergebnisse_r1 = {}
-    st.session_state.ergebnisse_r2 = {}
-    st.session_state.ergebnisse_r3 = {}
     st.session_state.rangliste_r1 = None
     st.session_state.rangliste_r2 = None
     st.rerun()
@@ -143,7 +137,6 @@ if st.session_state.spielplan_r1:
     st.header("Spielplan: Runde 1")
     st.download_button("📄 Laufzettel R1 (PDF)", data=erstelle_laufzettel_pdf(st.session_state.spielplan_r1, "Runde 1"), file_name="Runde_1.pdf", mime="application/pdf", key="dl_r1")
     
-    # NEU: Sofort sichtbare Auswertungstabelle für Runde 1
     if st.session_state.rangliste_r1:
         st.success("✅ Ergebnisse für Runde 1 sind gespeichert!")
         st.subheader("📊 Auswertungstabelle: Stand nach Runde 1")
@@ -168,10 +161,12 @@ if st.session_state.spielplan_r1:
                         st.markdown(f"**Spiel {i+1}: {spiel['Team 1 Text']} vs {spiel['Team 2 Text']}**")
                         col1, col2, col3, col4 = st.columns(4)
                         key_pfx = f"r1_{feld_name}_spiel{i}"
-                        with col1: st.session_state.ergebnisse_r1[f"{key_pfx}_s1_t1"] = st.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t1")
-                        with col2: st.session_state.ergebnisse_r1[f"{key_pfx}_s1_t2"] = st.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t2")
-                        with col3: st.session_state.ergebnisse_r1[f"{key_pfx}_s2_t1"] = st.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t1")
-                        with col4: st.session_state.ergebnisse_r1[f"{key_pfx}_s2_t2"] = st.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t2")
+                        
+                        # Direkte Bindung an st.session_state ohne redundante dict-Zuweisung
+                        col1.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t1")
+                        col2.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t2")
+                        col3.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t1")
+                        col4.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t2")
                         st.divider()
             
             if st.form_submit_button("💾 Ergebnisse R1 speichern & Runde 2 auslosen"):
@@ -179,10 +174,10 @@ if st.session_state.spielplan_r1:
                 for feld_name, spiele in st.session_state.spielplan_r1.items():
                     for i, spiel in enumerate(spiele):
                         key_pfx = f"r1_{feld_name}_spiel{i}"
-                        s1_t1 = st.session_state.ergebnisse_r1[f"{key_pfx}_s1_t1"]
-                        s1_t2 = st.session_state.ergebnisse_r1[f"{key_pfx}_s1_t2"]
-                        s2_t1 = st.session_state.ergebnisse_r1[f"{key_pfx}_s2_t1"]
-                        s2_t2 = st.session_state.ergebnisse_r1[f"{key_pfx}_s2_t2"]
+                        s1_t1 = st.session_state.get(f"{key_pfx}_s1_t1", 0)
+                        s1_t2 = st.session_state.get(f"{key_pfx}_s1_t2", 0)
+                        s2_t1 = st.session_state.get(f"{key_pfx}_s2_t1", 0)
+                        s2_t2 = st.session_state.get(f"{key_pfx}_s2_t2", 0)
                         
                         if s1_t1 > s1_t2: 
                             for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
@@ -211,7 +206,6 @@ if st.session_state.spielplan_r2:
     st.header("Spielplan: Runde 2 (Power Pools)")
     st.download_button("📄 Laufzettel R2 (PDF)", data=erstelle_laufzettel_pdf(st.session_state.spielplan_r2, "Runde 2"), file_name="Runde_2.pdf", mime="application/pdf", key="dl_r2")
     
-    # NEU: Sofort sichtbare Pool-Tabellen für Runde 2
     if st.session_state.rangliste_r2:
         st.success("✅ Ergebnisse für Runde 2 sind gespeichert!")
         st.subheader("📊 Auswertungstabelle: Pools nach Runde 2")
@@ -241,10 +235,10 @@ if st.session_state.spielplan_r2:
                         col1, col2, col3, col4 = st.columns(4)
                         key_pfx = f"r2_{feld_name}_spiel{i}"
                         
-                        with col1: st.session_state.ergebnisse_r2[f"{key_pfx}_s1_t1"] = st.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t1")
-                        with col2: st.session_state.ergebnisse_r2[f"{key_pfx}_s1_t2"] = st.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t2")
-                        with col3: st.session_state.ergebnisse_r2[f"{key_pfx}_s2_t1"] = st.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t1")
-                        with col4: st.session_state.ergebnisse_r2[f"{key_pfx}_s2_t2"] = st.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t2")
+                        col1.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t1")
+                        col2.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t2")
+                        col3.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t1")
+                        col4.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t2")
                         st.divider()
             
             if st.form_submit_button("💾 Ergebnisse R2 speichern & Runde 3 berechnen"):
@@ -260,10 +254,10 @@ if st.session_state.spielplan_r2:
                     stats = {p: {"saetze": 0, "diff": 0, "punkte": 0} for p in feld_spieler}
                     for i, spiel in enumerate(spiele):
                         key_pfx = f"r2_{feld_name}_spiel{i}"
-                        s1_t1 = st.session_state.ergebnisse_r2[f"{key_pfx}_s1_t1"]
-                        s1_t2 = st.session_state.ergebnisse_r2[f"{key_pfx}_s1_t2"]
-                        s2_t1 = st.session_state.ergebnisse_r2[f"{key_pfx}_s2_t1"]
-                        s2_t2 = st.session_state.ergebnisse_r2[f"{key_pfx}_s2_t2"]
+                        s1_t1 = st.session_state.get(f"{key_pfx}_s1_t1", 0)
+                        s1_t2 = st.session_state.get(f"{key_pfx}_s1_t2", 0)
+                        s2_t1 = st.session_state.get(f"{key_pfx}_s2_t1", 0)
+                        s2_t2 = st.session_state.get(f"{key_pfx}_s2_t2", 0)
                         
                         if s1_t1 > s1_t2: 
                             for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
@@ -305,10 +299,10 @@ if st.session_state.spielplan_r3:
                         col1, col2, col3, col4 = st.columns(4)
                         key_pfx = f"r3_{feld_name}_spiel{i}"
                         
-                        with col1: st.session_state.ergebnisse_r3[f"{key_pfx}_s1_t1"] = st.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t1")
-                        with col2: st.session_state.ergebnisse_r3[f"{key_pfx}_s1_t2"] = st.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t2")
-                        with col3: st.session_state.ergebnisse_r3[f"{key_pfx}_s2_t1"] = st.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t1")
-                        with col4: st.session_state.ergebnisse_r3[f"{key_pfx}_s2_t2"] = st.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t2")
+                        col1.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t1")
+                        col2.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t2")
+                        col3.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t1")
+                        col4.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t2")
                         st.divider()
 
             if st.form_submit_button("🏆 Ergebnisse R3 speichern & Endstand berechnen"):
@@ -326,10 +320,10 @@ if st.session_state.spielplan_r3:
                     stats = {p: {"saetze": 0, "diff": 0, "punkte": 0} for p in feld_spieler}
                     for i, spiel in enumerate(spiele):
                         key_pfx = f"r3_{feld_name}_spiel{i}"
-                        s1_t1 = st.session_state.ergebnisse_r3[f"{key_pfx}_s1_t1"]
-                        s1_t2 = st.session_state.ergebnisse_r3[f"{key_pfx}_s1_t2"]
-                        s2_t1 = st.session_state.ergebnisse_r3[f"{key_pfx}_s2_t1"]
-                        s2_t2 = st.session_state.ergebnisse_r3[f"{key_pfx}_s2_t2"]
+                        s1_t1 = st.session_state.get(f"{key_pfx}_s1_t1", 0)
+                        s1_t2 = st.session_state.get(f"{key_pfx}_s1_t2", 0)
+                        s2_t1 = st.session_state.get(f"{key_pfx}_s2_t1", 0)
+                        s2_t2 = st.session_state.get(f"{key_pfx}_s2_t2", 0)
                         
                         if s1_t1 > s1_t2: 
                             for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
