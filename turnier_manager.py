@@ -1,8 +1,60 @@
 import streamlit as st
 from fpdf import FPDF
-import random
+import json
+import gspread
+from google.auth.credential_import_gserviceaccount import Credentials
 
-# --- 1. KERNLOGIK ---
+# --- GOOGLE SHEETS SYSTEM LOGIK ---
+def get_gspread_client():
+    try:
+        credentials_dict = st.secrets["gcp_service_account"]
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(credentials_dict, scopes=scope)
+        return gspread.authorize(creds)
+    except Exception as e:
+        st.error(f"Fehler bei der Google-Authentifizierung: {e}")
+        return None
+
+def load_global_state_from_sheets(sh):
+    try:
+        ws = sh.worksheet("GlobalState")
+    except gspread.exceptions.WorksheetNotFound:
+        return {}
+    
+    records = ws.get_all_records()
+    state = {}
+    for r in records:
+        key = r["Key"]
+        val_str = r["Value"]
+        try:
+            state[key] = json.loads(val_str)
+        except:
+            state[key] = val_str
+    return state
+
+def save_global_state_to_sheets(sh):
+    try:
+        ws = sh.worksheet("GlobalState")
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sh.add_worksheet(title="GlobalState", rows="500", cols="2")
+    
+    ws.clear()
+    ws.append_row(["Key", "Value"])
+    
+    keys_to_persist = [
+        "teilnehmer", "spielplan_r1", "spielplan_r2", "spielplan_r3",
+        "endstand_tabelle", "platz_17_bis_20", "rangliste_r1", "rangliste_r2"
+    ]
+    
+    rows = []
+    for k in st.session_state.keys():
+        if k in keys_to_persist or k.startswith("r1_") or k.startswith("r2_") or k.startswith("r3_"):
+            rows.append([k, json.dumps(st.session_state[k])])
+            
+    if rows:
+        ws.append_rows(rows)
+
+# --- KERNLOGIK TURNIER ---
 def generiere_kotb_spiele(gruppe):
     return [
         {
@@ -24,10 +76,8 @@ def erstelle_runden_spielplan_r1(spieler_liste):
     for i in range(20):
         spieler = spieler_liste[i]
         durchgang = i // 5 
-        if durchgang % 2 == 0:
-            feld_index = i % 5
-        else:
-            feld_index = 4 - (i % 5)
+        if durchgang % 2 == 0: feld_index = i % 5
+        else: feld_index = 4 - (i % 5)
         felder[feld_index].append(spieler)
         
     runden_plan = {}
@@ -48,7 +98,6 @@ def erstelle_runde_2_spielplan(spieler_liste):
         felder[feld_index].append(spieler)
         
     felder.append(bottom_4)
-    
     runden_plan = {}
     for index, gruppe in enumerate(felder):
         runden_plan[f"Feld {index + 1}"] = generiere_kotb_spiele(gruppe)
@@ -72,13 +121,11 @@ def erstelle_runde_3_spielplan(r2_tabellen_pro_feld):
 def erstelle_laufzettel_pdf(spielplan, runden_name):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
-    
     for feld_name, spiele in spielplan.items():
         pdf.add_page() 
         pdf.set_font("Arial", 'B', 16)
         pdf.cell(200, 10, txt=f"Laufzettel - {runden_name} - {feld_name}", ln=True, align='C')
         pdf.ln(10)
-        
         for i, spiel in enumerate(spiele):
             pdf.set_font("Arial", 'B', 12)
             pdf.cell(200, 8, txt=f"Spiel {i+1}", ln=True, align='L')
@@ -89,7 +136,19 @@ def erstelle_laufzettel_pdf(spielplan, runden_name):
             pdf.ln(10)
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 2. DATENBANK & GEDAECHTNIS ---
+# --- INITIALISIERUNG & DATENBANK-VERBINDUNG ---
+st.set_page_config(layout="wide")
+st.title("🏐 King of the Beach - Cloud Manager")
+
+client = get_gspread_client()
+sh = None
+if client:
+    try:
+        sh = client.open("Beachvolleyball_Turnier")
+    except Exception as e:
+        st.error(f"Google Sheet 'Beachvolleyball_Turnier' nicht gefunden. Bitte Freigabe prüfen! Fehler: {e}")
+
+# Basiseinstellungen laden falls Cloud leer
 if 'teilnehmer' not in st.session_state: st.session_state.teilnehmer = [f"Spieler {i} ({i})" for i in range(1, 21)]
 if 'spielplan_r1' not in st.session_state: st.session_state.spielplan_r1 = None
 if 'spielplan_r2' not in st.session_state: st.session_state.spielplan_r2 = None
@@ -99,14 +158,18 @@ if 'platz_17_bis_20' not in st.session_state: st.session_state.platz_17_bis_20 =
 if 'rangliste_r1' not in st.session_state: st.session_state.rangliste_r1 = None
 if 'rangliste_r2' not in st.session_state: st.session_state.rangliste_r2 = None
 
-# --- 3. BENUTZEROBERFLAECHE (UI) ---
-st.set_page_config(layout="wide")
-st.title("🏐 King of the Beach - Turnier Manager")
-
-# -- SIDEBAR --
+# -- SIDEBAR STEUERUNG --
 st.sidebar.header("Turniersteuerung")
-uploaded_file = st.sidebar.file_uploader("Setzliste (CSV) hochladen", type=["csv"])
 
+if sh:
+    if st.sidebar.button("🔄 Daten vom Server laden"):
+        db_state = load_global_state_from_sheets(sh)
+        for k, v in db_state.items():
+            st.session_state[k] = v
+        st.sidebar.success("📊 Daten erfolgreich synchronisiert!")
+        st.rerun()
+
+uploaded_file = st.sidebar.file_uploader("Setzliste (CSV) hochladen", type=["csv"])
 if uploaded_file is not None:
     try:
         bytes_data = uploaded_file.read()
@@ -119,10 +182,12 @@ if uploaded_file is not None:
             elif len(teile) == 2: anzeige_name = f"{teile[1].replace('\"', '').strip()} ({teile[0].replace('\"', '').strip()})"
             else: anzeige_name = teile[0].replace('"', '').strip()
             importierte_namen.append(anzeige_name)
-        if len(importierte_namen) == 20: st.session_state.teilnehmer = importierte_namen
+        if len(importierte_namen) == 20: 
+            st.session_state.teilnehmer = importierte_namen
+            st.sidebar.success("Setzliste lokal geladen. Klicke auf 'Turnier neu starten' zum Hochladen.")
     except Exception as e: st.sidebar.error(f"Fehler: {e}")
 
-if st.sidebar.button("📋 Turnier neu starten"):
+if st.sidebar.button("📋 Turnier neu starten / Reset"):
     st.session_state.spielplan_r1 = erstelle_runden_spielplan_r1(st.session_state.teilnehmer)
     st.session_state.spielplan_r2 = None
     st.session_state.spielplan_r3 = None
@@ -130,6 +195,12 @@ if st.sidebar.button("📋 Turnier neu starten"):
     st.session_state.platz_17_bis_20 = []
     st.session_state.rangliste_r1 = None
     st.session_state.rangliste_r2 = None
+    # Bereinige alte Ergebnisse
+    for k in list(st.session_state.keys()):
+        if k.startswith("r1_") or k.startswith("r2_") or k.startswith("r3_"):
+            del st.session_state[k]
+    if sh:
+        save_global_state_to_sheets(sh)
     st.rerun()
 
 # ================= RUNDE 1 =================
@@ -138,19 +209,11 @@ if st.session_state.spielplan_r1:
     st.download_button("📄 Laufzettel R1 (PDF)", data=erstelle_laufzettel_pdf(st.session_state.spielplan_r1, "Runde 1"), file_name="Runde_1.pdf", mime="application/pdf", key="dl_r1")
     
     if st.session_state.rangliste_r1:
-        st.success("✅ Ergebnisse für Runde 1 sind gespeichert!")
         st.subheader("📊 Auswertungstabelle: Stand nach Runde 1")
         data_r1 = []
         for idx, (spieler, s_stats) in enumerate(st.session_state.rangliste_r1, 1):
-            data_r1.append({
-                "Platz": idx,
-                "Spieler": spieler.split('(')[0].strip(),
-                "Gewonnene Sätze": s_stats["saetze"],
-                "Ball-Differenz": s_stats["diff"],
-                "Eigene Punkte": s_stats["punkte"]
-            })
+            data_r1.append({"Platz": idx, "Spieler": spieler.split('(')[0].strip(), "Gewonnene Sätze": s_stats["saetze"], "Ball-Differenz": s_stats["diff"], "Eigene Punkte": s_stats["punkte"]})
         st.dataframe(data_r1, use_container_width=True)
-        st.write("---")
 
     with st.expander("📝 Ergebnisse Runde 1 eintragen", expanded=(st.session_state.spielplan_r2 is None)):
         with st.form("ergebnisse_r1_form"):
@@ -162,11 +225,10 @@ if st.session_state.spielplan_r1:
                         col1, col2, col3, col4 = st.columns(4)
                         key_pfx = f"r1_{feld_name}_spiel{i}"
                         
-                        # Direkte Bindung an st.session_state ohne redundante dict-Zuweisung
-                        col1.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t1")
-                        col2.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t2")
-                        col3.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t1")
-                        col4.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t2")
+                        col1.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t1", 0), key=f"{key_pfx}_s1_t1")
+                        col2.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t2", 0), key=f"{key_pfx}_s1_t2")
+                        col3.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t1", 0), key=f"{key_pfx}_s2_t1")
+                        col4.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t2", 0), key=f"{key_pfx}_s2_t2")
                         st.divider()
             
             if st.form_submit_button("💾 Ergebnisse R1 speichern & Runde 2 auslosen"):
@@ -174,30 +236,23 @@ if st.session_state.spielplan_r1:
                 for feld_name, spiele in st.session_state.spielplan_r1.items():
                     for i, spiel in enumerate(spiele):
                         key_pfx = f"r1_{feld_name}_spiel{i}"
-                        s1_t1 = st.session_state.get(f"{key_pfx}_s1_t1", 0)
-                        s1_t2 = st.session_state.get(f"{key_pfx}_s1_t2", 0)
-                        s2_t1 = st.session_state.get(f"{key_pfx}_s2_t1", 0)
-                        s2_t2 = st.session_state.get(f"{key_pfx}_s2_t2", 0)
+                        s1_t1 = st.session_state[f"{key_pfx}_s1_t1"]
+                        s1_t2 = st.session_state[f"{key_pfx}_s1_t2"]
+                        s2_t1 = st.session_state[f"{key_pfx}_s2_t1"]
+                        s2_t2 = st.session_state[f"{key_pfx}_s2_t2"]
                         
-                        if s1_t1 > s1_t2: 
-                            for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
-                        elif s1_t2 > s1_t1: 
-                            for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
-                        if s2_t1 > s2_t2: 
-                            for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
-                        elif s2_t2 > s2_t1: 
-                            for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
+                        if s1_t1 > s1_t2: for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
+                        elif s1_t2 > s1_t1: for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
+                        if s2_t1 > s2_t2: for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
+                        elif s2_t2 > s2_t1: for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
                         
-                        for p in spiel["Team 1 Spieler"]:
-                            stats[p]["punkte"] += (s1_t1 + s2_t1)
-                            stats[p]["diff"] += ((s1_t1 + s2_t1) - (s1_t2 + s2_t2))
-                        for p in spiel["Team 2 Spieler"]:
-                            stats[p]["punkte"] += (s1_t2 + s2_t2)
-                            stats[p]["diff"] += ((s1_t2 + s2_t2) - (s1_t1 + s2_t1))
+                        for p in spiel["Team 1 Spieler"]: stats[p]["punkte"] += (s1_t1 + s2_t1); stats[p]["diff"] += ((s1_t1 + s2_t1) - (s1_t2 + s2_t2))
+                        for p in spiel["Team 2 Spieler"]: stats[p]["punkte"] += (s1_t2 + s2_t2); stats[p]["diff"] += ((s1_t2 + s2_t2) - (s1_t1 + s2_t1))
                             
                 sortierte_spieler = sorted(stats.items(), key=lambda x: (x[1]["saetze"], x[1]["diff"], x[1]["punkte"]), reverse=True)
                 st.session_state.rangliste_r1 = sortierte_spieler
                 st.session_state.spielplan_r2 = erstelle_runde_2_spielplan([s[0] for s in sortierte_spieler])
+                if sh: save_global_state_to_sheets(sh)
                 st.rerun()
 
 # ================= RUNDE 2 =================
@@ -207,23 +262,15 @@ if st.session_state.spielplan_r2:
     st.download_button("📄 Laufzettel R2 (PDF)", data=erstelle_laufzettel_pdf(st.session_state.spielplan_r2, "Runde 2"), file_name="Runde_2.pdf", mime="application/pdf", key="dl_r2")
     
     if st.session_state.rangliste_r2:
-        st.success("✅ Ergebnisse für Runde 2 sind gespeichert!")
         st.subheader("📊 Auswertungstabelle: Pools nach Runde 2")
-        
         spalten_r2 = st.columns(5)
         for idx, (feld_name, sortierte_liste) in enumerate(st.session_state.rangliste_r2.items()):
             with spalten_r2[idx]:
                 st.markdown(f"**{feld_name}**")
                 data_r2 = []
                 for p_idx, (spieler, s_stats) in enumerate(sortierte_liste, 1):
-                    data_r2.append({
-                        "Rang": p_idx,
-                        "Spieler": spieler.split('(')[0].strip(),
-                        "Sätze": s_stats["saetze"],
-                        "Diff": s_stats["diff"]
-                    })
+                    data_r2.append({"Rang": p_idx, "Spieler": spieler.split('(')[0].strip(), "Sätze": s_stats["saetze"], "Diff": s_stats["diff"]})
                 st.dataframe(data_r2, use_container_width=True)
-        st.write("---")
 
     with st.expander("📝 Ergebnisse Runde 2 eintragen", expanded=(st.session_state.spielplan_r3 is None)):
         with st.form("ergebnisse_r2_form"):
@@ -235,10 +282,10 @@ if st.session_state.spielplan_r2:
                         col1, col2, col3, col4 = st.columns(4)
                         key_pfx = f"r2_{feld_name}_spiel{i}"
                         
-                        col1.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t1")
-                        col2.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t2")
-                        col3.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t1")
-                        col4.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t2")
+                        col1.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t1", 0), key=f"{key_pfx}_s1_t1")
+                        col2.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t2", 0), key=f"{key_pfx}_s1_t2")
+                        col3.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t1", 0), key=f"{key_pfx}_s2_t1")
+                        col4.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t2", 0), key=f"{key_pfx}_s2_t2")
                         st.divider()
             
             if st.form_submit_button("💾 Ergebnisse R2 speichern & Runde 3 berechnen"):
@@ -254,26 +301,18 @@ if st.session_state.spielplan_r2:
                     stats = {p: {"saetze": 0, "diff": 0, "punkte": 0} for p in feld_spieler}
                     for i, spiel in enumerate(spiele):
                         key_pfx = f"r2_{feld_name}_spiel{i}"
-                        s1_t1 = st.session_state.get(f"{key_pfx}_s1_t1", 0)
-                        s1_t2 = st.session_state.get(f"{key_pfx}_s1_t2", 0)
-                        s2_t1 = st.session_state.get(f"{key_pfx}_s2_t1", 0)
-                        s2_t2 = st.session_state.get(f"{key_pfx}_s2_t2", 0)
+                        s1_t1 = st.session_state[f"{key_pfx}_s1_t1"]
+                        s1_t2 = st.session_state[f"{key_pfx}_s1_t2"]
+                        s2_t1 = st.session_state[f"{key_pfx}_s2_t1"]
+                        s2_t2 = st.session_state[f"{key_pfx}_s2_t2"]
                         
-                        if s1_t1 > s1_t2: 
-                            for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
-                        elif s1_t2 > s1_t1: 
-                            for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
-                        if s2_t1 > s2_t2: 
-                            for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
-                        elif s2_t2 > s2_t1: 
-                            for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
+                        if s1_t1 > s1_t2: for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
+                        elif s1_t2 > s1_t1: for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
+                        if s2_t1 > s2_t2: for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
+                        elif s2_t2 > s2_t1: for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
                         
-                        for p in spiel["Team 1 Spieler"]:
-                            stats[p]["punkte"] += (s1_t1 + s2_t1)
-                            stats[p]["diff"] += ((s1_t1 + s2_t1) - (s1_t2 + s2_t2))
-                        for p in spiel["Team 2 Spieler"]:
-                            stats[p]["punkte"] += (s1_t2 + s2_t2)
-                            stats[p]["diff"] += ((s1_t2 + s2_t2) - (s1_t1 + s2_t1))
+                        for p in spiel["Team 1 Spieler"]: stats[p]["punkte"] += (s1_t1 + s2_t1); stats[p]["diff"] += ((s1_t1 + s2_t1) - (s1_t2 + s2_t2))
+                        for p in spiel["Team 2 Spieler"]: stats[p]["punkte"] += (s1_t2 + s2_t2); stats[p]["diff"] += ((s1_t2 + s2_t2) - (s1_t1 + s2_t1))
                             
                     sortiert = sorted(stats.items(), key=lambda x: (x[1]["saetze"], x[1]["diff"], x[1]["punkte"]), reverse=True)
                     r2_tabellen_pro_feld[feld_name] = [s[0] for s in sortiert]
@@ -281,6 +320,7 @@ if st.session_state.spielplan_r2:
                 
                 st.session_state.platz_17_bis_20 = r2_tabellen_pro_feld["Feld 5"]
                 st.session_state.spielplan_r3 = erstelle_runde_3_spielplan(r2_tabellen_pro_feld)
+                if sh: save_global_state_to_sheets(sh)
                 st.rerun()
 
 # ================= RUNDE 3 =================
@@ -299,15 +339,14 @@ if st.session_state.spielplan_r3:
                         col1, col2, col3, col4 = st.columns(4)
                         key_pfx = f"r3_{feld_name}_spiel{i}"
                         
-                        col1.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t1")
-                        col2.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t2")
-                        col3.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t1")
-                        col4.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t2")
+                        col1.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t1", 0), key=f"{key_pfx}_s1_t1")
+                        col2.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t2", 0), key=f"{key_pfx}_s1_t2")
+                        col3.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t1", 0), key=f"{key_pfx}_s2_t1")
+                        col4.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t2", 0), key=f"{key_pfx}_s2_t2")
                         st.divider()
 
             if st.form_submit_button("🏆 Ergebnisse R3 speichern & Endstand berechnen"):
                 finale_platzierungen = []
-                
                 for f_idx in range(1, 5):
                     feld_name = f"Feld {f_idx}"
                     spiele = st.session_state.spielplan_r3[feld_name]
@@ -320,32 +359,25 @@ if st.session_state.spielplan_r3:
                     stats = {p: {"saetze": 0, "diff": 0, "punkte": 0} for p in feld_spieler}
                     for i, spiel in enumerate(spiele):
                         key_pfx = f"r3_{feld_name}_spiel{i}"
-                        s1_t1 = st.session_state.get(f"{key_pfx}_s1_t1", 0)
-                        s1_t2 = st.session_state.get(f"{key_pfx}_s1_t2", 0)
-                        s2_t1 = st.session_state.get(f"{key_pfx}_s2_t1", 0)
-                        s2_t2 = st.session_state.get(f"{key_pfx}_s2_t2", 0)
+                        s1_t1 = st.session_state[f"{key_pfx}_s1_t1"]
+                        s1_t2 = st.session_state[f"{key_pfx}_s1_t2"]
+                        s2_t1 = st.session_state[f"{key_pfx}_s2_t1"]
+                        s2_t2 = st.session_state[f"{key_pfx}_s2_t2"]
                         
-                        if s1_t1 > s1_t2: 
-                            for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
-                        elif s1_t2 > s1_t1: 
-                            for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
-                        if s2_t1 > s2_t2: 
-                            for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
-                        elif s2_t2 > s2_t1: 
-                            for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
+                        if s1_t1 > s1_t2: for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
+                        elif s1_t2 > s1_t1: for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
+                        if s2_t1 > s2_t2: for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
+                        elif s2_t2 > s2_t1: for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
                         
-                        for p in spiel["Team 1 Spieler"]:
-                            stats[p]["punkte"] += (s1_t1 + s2_t1)
-                            stats[p]["diff"] += ((s1_t1 + s2_t1) - (s1_t2 + s2_t2))
-                        for p in spiel["Team 2 Spieler"]:
-                            stats[p]["punkte"] += (s1_t2 + s2_t2)
-                            stats[p]["diff"] += ((s1_t2 + s2_t2) - (s1_t1 + s2_t1))
+                        for p in spiel["Team 1 Spieler"]: stats[p]["punkte"] += (s1_t1 + s2_t1); stats[p]["diff"] += ((s1_t1 + s2_t1) - (s1_t2 + s2_t2))
+                        for p in spiel["Team 2 Spieler"]: stats[p]["punkte"] += (s1_t2 + s2_t2); stats[p]["diff"] += ((s1_t2 + s2_t2) - (s1_t1 + s2_t1))
                             
                     sortiert = sorted(stats.items(), key=lambda x: (x[1]["saetze"], x[1]["diff"], x[1]["punkte"]), reverse=True)
                     finale_platzierungen.extend([s[0] for s in sortiert])
                 
                 finale_platzierungen.extend(st.session_state.platz_17_bis_20)
                 st.session_state.endstand_tabelle = finale_platzierungen
+                if sh: save_global_state_to_sheets(sh)
                 st.rerun()
 
 # ================= ENDSTAND / SIEGEREHRUNG =================
@@ -355,7 +387,6 @@ if st.session_state.endstand_tabelle:
     st.header("🏆 Offizieller Endstand des Turniers 🏆")
     
     col1, col2, col3, col4, col5 = st.columns(5)
-    
     for i in range(20):
         platz = i + 1
         voller_name = st.session_state.endstand_tabelle[i]
@@ -372,17 +403,11 @@ if st.session_state.endstand_tabelle:
         elif i < 16: col4.error(text)
         else:
             html_text = f"{platz}. Platz: {name_ohne_klammer}"
-            col5.markdown(
-                f"<div style='background-color: #4a148c; color: #ffffff; padding: 10px; margin-bottom: 8px; border-radius: 5px; border-left: 5px solid #ab47bc; font-weight: bold;'>{html_text}</div>", 
-                unsafe_allow_html=True
-            )
+            col5.markdown(f"<div style='background-color: #4a148c; color: #ffffff; padding: 10px; margin-bottom: 8px; border-radius: 5px; border-left: 5px solid #ab47bc; font-weight: bold;'>{html_text}</div>", unsafe_allow_html=True)
             
     st.write("---")
     st.subheader("📊 Offizielle Gesamt-Rangliste")
     data_final = []
     for i, voller_name in enumerate(st.session_state.endstand_tabelle, 1):
-        data_final.append({
-            "Endplatzierung": f"{i}. Platz",
-            "Spieler": voller_name.split('(')[0].strip()
-        })
+        data_final.append({"Endplatzierung": f"{i}. Platz", "Spieler": voller_name.split('(')[0].strip()})
     st.dataframe(data_final, use_container_width=True)
