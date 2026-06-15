@@ -138,7 +138,7 @@ def erstelle_laufzettel_pdf(spielplan, runden_name):
 
 # --- INITIALISIERUNG & DATENBANK-VERBINDUNG ---
 st.set_page_config(layout="wide")
-st.title("🏐 King of the Beach - Cloud Manager")
+st.title("🏐 King of the Beach - Turnier Manager")
 
 client = get_gspread_client()
 sh = None
