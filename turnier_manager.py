@@ -48,7 +48,6 @@ def save_global_state_to_sheets(sh):
     
     rows = []
     for k in st.session_state.keys():
-        # Erfasse alle langlebigen Variablen sowie rundenbasierte Keys mit dynamischer ID
         if k in keys_to_persist or k.startswith("r1_") or k.startswith("r2_") or k.startswith("r3_"):
             rows.append([k, json.dumps(st.session_state[k])])
             
@@ -56,19 +55,22 @@ def save_global_state_to_sheets(sh):
         ws.append_rows(rows)
 
 # --- KERNLOGIK TURNIER ---
+def kurzname(spieler):
+    return spieler.split('(')[0].strip()
+
 def generiere_kotb_spiele(gruppe):
     return [
         {
-            "Team 1 Text": f"{gruppe[0]} & {gruppe[1]}", "Team 1 Spieler": [gruppe[0], gruppe[1]],
-            "Team 2 Text": f"{gruppe[2]} & {gruppe[3]}", "Team 2 Spieler": [gruppe[2], gruppe[3]]
+            "Team 1 Text": f"{kurzname(gruppe[0])} / {kurzname(gruppe[1])}", "Team 1 Spieler": [gruppe[0], gruppe[1]],
+            "Team 2 Text": f"{kurzname(gruppe[2])} / {kurzname(gruppe[3])}", "Team 2 Spieler": [gruppe[2], gruppe[3]]
         },
         {
-            "Team 1 Text": f"{gruppe[0]} & {gruppe[2]}", "Team 1 Spieler": [gruppe[0], gruppe[2]],
-            "Team 2 Text": f"{gruppe[1]} & {gruppe[3]}", "Team 2 Spieler": [gruppe[1], gruppe[3]]
+            "Team 1 Text": f"{kurzname(gruppe[0])} / {kurzname(gruppe[2])}", "Team 1 Spieler": [gruppe[0], gruppe[2]],
+            "Team 2 Text": f"{kurzname(gruppe[1])} / {kurzname(gruppe[3])}", "Team 2 Spieler": [gruppe[1], gruppe[3]]
         },
         {
-            "Team 1 Text": f"{gruppe[0]} & {gruppe[3]}", "Team 1 Spieler": [gruppe[0], gruppe[3]],
-            "Team 2 Text": f"{gruppe[1]} & {gruppe[2]}", "Team 2 Spieler": [gruppe[1], gruppe[2]]
+            "Team 1 Text": f"{kurzname(gruppe[0])} / {kurzname(gruppe[3])}", "Team 1 Spieler": [gruppe[0], gruppe[3]],
+            "Team 2 Text": f"{kurzname(gruppe[1])} / {kurzname(gruppe[2])}", "Team 2 Spieler": [gruppe[1], gruppe[2]]
         }
     ]
 
@@ -149,7 +151,6 @@ if client:
     except Exception as e:
         st.error(f"Google Sheet 'Beachvolleyball_Turnier' nicht gefunden. Bitte Freigabe prüfen! Fehler: {e}")
 
-# Basiseinstellungen & Reset-ID verankern
 if 'reset_id' not in st.session_state: st.session_state.reset_id = 0
 if 'teilnehmer' not in st.session_state: st.session_state.teilnehmer = [f"Spieler {i} ({i})" for i in range(1, 21)]
 if 'spielplan_r1' not in st.session_state: st.session_state.spielplan_r1 = None
@@ -190,7 +191,6 @@ if uploaded_file is not None:
     except Exception as e: st.sidebar.error(f"Fehler: {e}")
 
 if st.sidebar.button("📋 Turnier neu starten / Reset"):
-    # Erhöhe die ID um Streamlit-Eingaben im Frontend hart zu zerstören
     st.session_state.reset_id = st.session_state.get('reset_id', 0) + 1
     st.session_state.spielplan_r1 = erstelle_runden_spielplan_r1(st.session_state.teilnehmer)
     st.session_state.spielplan_r2 = None
@@ -228,10 +228,10 @@ if st.session_state.spielplan_r1:
                         col1, col2, col3, col4 = st.columns(4)
                         key_pfx = f"r1_{feld_name}_spiel{i}"
                         
-                        col1.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t1_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s1_t1_{st.session_state.reset_id}")
-                        col2.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t2_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s1_t2_{st.session_state.reset_id}")
-                        col3.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t1_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s2_t1_{st.session_state.reset_id}")
-                        col4.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t2_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s2_t2_{st.session_state.reset_id}")
+                        col1.number_input(f"Satz 1: {spiel['Team 1 Text']}", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t1_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s1_t1_{st.session_state.reset_id}")
+                        col2.number_input(f"Satz 1: {spiel['Team 2 Text']}", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t2_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s1_t2_{st.session_state.reset_id}")
+                        col3.number_input(f"Satz 2: {spiel['Team 1 Text']}", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t1_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s2_t1_{st.session_state.reset_id}")
+                        col4.number_input(f"Satz 2: {spiel['Team 2 Text']}", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t2_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s2_t2_{st.session_state.reset_id}")
                         st.divider()
             
             btn_col1, btn_col2 = st.columns(2)
@@ -298,10 +298,10 @@ if st.session_state.spielplan_r2:
                         col1, col2, col3, col4 = st.columns(4)
                         key_pfx = f"r2_{feld_name}_spiel{i}"
                         
-                        col1.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t1_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s1_t1_{st.session_state.reset_id}")
-                        col2.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t2_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s1_t2_{st.session_state.reset_id}")
-                        col3.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t1_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s2_t1_{st.session_state.reset_id}")
-                        col4.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t2_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s2_t2_{st.session_state.reset_id}")
+                        col1.number_input(f"Satz 1: {spiel['Team 1 Text']}", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t1_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s1_t1_{st.session_state.reset_id}")
+                        col2.number_input(f"Satz 1: {spiel['Team 2 Text']}", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t2_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s1_t2_{st.session_state.reset_id}")
+                        col3.number_input(f"Satz 2: {spiel['Team 1 Text']}", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t1_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s2_t1_{st.session_state.reset_id}")
+                        col4.number_input(f"Satz 2: {spiel['Team 2 Text']}", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t2_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s2_t2_{st.session_state.reset_id}")
                         st.divider()
             
             btn_col1, btn_col2 = st.columns(2)
@@ -368,10 +368,10 @@ if st.session_state.spielplan_r3:
                         col1, col2, col3, col4 = st.columns(4)
                         key_pfx = f"r3_{feld_name}_spiel{i}"
                         
-                        col1.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t1_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s1_t1_{st.session_state.reset_id}")
-                        col2.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t2_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s1_t2_{st.session_state.reset_id}")
-                        col3.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t1_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s2_t1_{st.session_state.reset_id}")
-                        col4.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t2_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s2_t2_{st.session_state.reset_id}")
+                        col1.number_input(f"Satz 1: {spiel['Team 1 Text']}", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t1_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s1_t1_{st.session_state.reset_id}")
+                        col2.number_input(f"Satz 1: {spiel['Team 2 Text']}", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s1_t2_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s1_t2_{st.session_state.reset_id}")
+                        col3.number_input(f"Satz 2: {spiel['Team 1 Text']}", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t1_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s2_t1_{st.session_state.reset_id}")
+                        col4.number_input(f"Satz 2: {spiel['Team 2 Text']}", min_value=0, max_value=30, value=st.session_state.get(f"{key_pfx}_s2_t2_{st.session_state.reset_id}", 0), key=f"{key_pfx}_s2_t2_{st.session_state.reset_id}")
                         st.divider()
 
             btn_col1, btn_col2 = st.columns(2)
@@ -414,8 +414,8 @@ if st.session_state.spielplan_r3:
                     for p in spiel["Team 1 Spieler"]: stats[p]["punkte"] += (s1_t1 + s2_t1); stats[p]["diff"] += ((s1_t1 + s2_t1) - (s1_t2 + s2_t2))
                     for p in spiel["Team 2 Spieler"]: stats[p]["punkte"] += (s1_t2 + s2_t2); stats[p]["diff"] += ((s1_t2 + s2_t2) - (s1_t1 + s2_t1))
                         
-                sortiert = sorted(stats.items(), key=lambda x: (x[1]["saetze"], x[1]["diff"], x[1]["punkte"]), reverse=True)
-                finale_platzierungen.extend([s[0] for s in sortiert])
+            sortiert = sorted(stats.items(), key=lambda x: (x[1]["saetze"], x[1]["diff"], x[1]["punkte"]), reverse=True)
+            finale_platzierungen.extend([s[0] for s in sortiert])
             
             finale_platzierungen.extend(st.session_state.platz_17_bis_20)
             st.session_state.endstand_tabelle = finale_platzierungen
