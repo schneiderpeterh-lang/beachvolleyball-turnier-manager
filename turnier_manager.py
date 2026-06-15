@@ -104,7 +104,7 @@ if 'rangliste_r2' not in st.session_state: st.session_state.rangliste_r2 = None
 
 # --- 3. BENUTZEROBERFLAECHE (UI) ---
 st.set_page_config(layout="wide")
-st.title("🏐 King of the Beach - Turnier Manager")
+st.title("🏐 TuB - King of the Beach - Turnier Manager")
 
 # -- SIDEBAR --
 st.sidebar.header("Turniersteuerung")
