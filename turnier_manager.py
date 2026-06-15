@@ -99,8 +99,6 @@ if 'ergebnisse_r2' not in st.session_state: st.session_state.ergebnisse_r2 = {}
 if 'ergebnisse_r3' not in st.session_state: st.session_state.ergebnisse_r3 = {}
 if 'endstand_tabelle' not in st.session_state: st.session_state.endstand_tabelle = None
 if 'platz_17_bis_20' not in st.session_state: st.session_state.platz_17_bis_20 = []
-
-# NEU: Gedächtnis für tabellarische Zwischenstände
 if 'rangliste_r1' not in st.session_state: st.session_state.rangliste_r1 = None
 if 'rangliste_r2' not in st.session_state: st.session_state.rangliste_r2 = None
 
@@ -145,7 +143,6 @@ if st.session_state.spielplan_r1:
     st.header("Spielplan: Runde 1")
     st.download_button("📄 Laufzettel R1 (PDF)", data=erstelle_laufzettel_pdf(st.session_state.spielplan_r1, "Runde 1"), file_name="Runde_1.pdf", mime="application/pdf", key="dl_r1")
     
-    # NEU: Tabelle für Runde 1 einblenden, sobald berechnet
     if st.session_state.rangliste_r1:
         with st.expander("📊 Tabelle / Rangliste nach Runde 1 anzeigen", expanded=False):
             data_r1 = []
@@ -211,7 +208,6 @@ if st.session_state.spielplan_r2:
     st.header("Spielplan: Runde 2 (Power Pools)")
     st.download_button("📄 Laufzettel R2 (PDF)", data=erstelle_laufzettel_pdf(st.session_state.spielplan_r2, "Runde 2"), file_name="Runde_2.pdf", mime="application/pdf", key="dl_r2")
     
-    # NEU: Pool-Tabellen für Runde 2 einblenden, sobald berechnet
     if st.session_state.rangliste_r2:
         with st.expander("📊 Pool-Ranglisten nach Runde 2 anzeigen", expanded=False):
             for feld_name, sortierte_liste in st.session_state.rangliste_r2.items():
@@ -243,7 +239,7 @@ if st.session_state.spielplan_r2:
                         with col4: st.session_state.ergebnisse_r2[f"{key_pfx}_s2_t2"] = st.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t2")
                         st.divider()
             
-            if st.form_submit_button("💾 Ergebnisse R2保存 & Runde 3 berechnen"):
+            if st.form_submit_button("💾 Ergebnisse R2 speichern & Runde 3 berechnen"):
                 r2_tabellen_pro_feld = {}
                 st.session_state.rangliste_r2 = {}
                 
@@ -373,13 +369,12 @@ if st.session_state.endstand_tabelle:
         elif i < 12: col3.warning(text)
         elif i < 16: col4.error(text)
         else:
-            # NEU: Schicke HTML-Highlight-Box für die Plätze 17 bis 20
+            # NEU: Dunkellila Hintergrund (#4a148c) mit weißer Schriftfarbe (#ffffff)
             col5.markdown(
-                f"<div style='background-color: #f0f2f6; padding: 10px; margin-bottom: 8px; border-radius: 5px; border-left: 5px solid #6c757d; font-weight: bold;'>{text}</div>", 
+                f"<div style='background-color: #4a148c; color: #ffffff; padding: 10px; margin-bottom: 8px; border-radius: 5px; border-left: 5px solid #ab47bc; font-weight: bold;'>{text}</div>", 
                 unsafe_allow_html=True
             )
             
-    # NEU: Zusammenfassende tabellarische Gesamt-Rangliste ganz unten
     st.write("---")
     st.subheader("📊 Offizielle Gesamt-Rangliste (Tabellarisch)")
     data_final = []
