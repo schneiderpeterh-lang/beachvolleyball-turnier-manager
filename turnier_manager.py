@@ -369,9 +369,10 @@ if st.session_state.endstand_tabelle:
         elif i < 12: col3.warning(text)
         elif i < 16: col4.error(text)
         else:
-            # NEU: Dunkellila Hintergrund (#4a148c) mit weißer Schriftfarbe (#ffffff)
+            # HTML mag keine Markdown-Sternchen. Wir definieren den Text hier sauber ohne "**"
+            html_text = f"{platz}. Platz: {name_ohne_klammer}"
             col5.markdown(
-                f"<div style='background-color: #4a148c; color: #ffffff; padding: 10px; margin-bottom: 8px; border-radius: 5px; border-left: 5px solid #ab47bc; font-weight: bold;'>{text}</div>", 
+                f"<div style='background-color: #4a148c; color: #ffffff; padding: 10px; margin-bottom: 8px; border-radius: 5px; border-left: 5px solid #ab47bc; font-weight: bold;'>{html_text}</div>", 
                 unsafe_allow_html=True
             )
             
