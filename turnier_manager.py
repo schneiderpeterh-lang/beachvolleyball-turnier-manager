@@ -100,6 +100,10 @@ if 'ergebnisse_r3' not in st.session_state: st.session_state.ergebnisse_r3 = {}
 if 'endstand_tabelle' not in st.session_state: st.session_state.endstand_tabelle = None
 if 'platz_17_bis_20' not in st.session_state: st.session_state.platz_17_bis_20 = []
 
+# NEU: Gedächtnis für tabellarische Zwischenstände
+if 'rangliste_r1' not in st.session_state: st.session_state.rangliste_r1 = None
+if 'rangliste_r2' not in st.session_state: st.session_state.rangliste_r2 = None
+
 # --- 3. BENUTZEROBERFLAECHE (UI) ---
 st.set_page_config(layout="wide")
 st.title("🏐 King of the Beach - Turnier Manager")
@@ -132,6 +136,8 @@ if st.sidebar.button("📋 Turnier neu starten"):
     st.session_state.ergebnisse_r1 = {}
     st.session_state.ergebnisse_r2 = {}
     st.session_state.ergebnisse_r3 = {}
+    st.session_state.rangliste_r1 = None
+    st.session_state.rangliste_r2 = None
     st.rerun()
 
 # ================= RUNDE 1 =================
@@ -139,6 +145,20 @@ if st.session_state.spielplan_r1:
     st.header("Spielplan: Runde 1")
     st.download_button("📄 Laufzettel R1 (PDF)", data=erstelle_laufzettel_pdf(st.session_state.spielplan_r1, "Runde 1"), file_name="Runde_1.pdf", mime="application/pdf", key="dl_r1")
     
+    # NEU: Tabelle für Runde 1 einblenden, sobald berechnet
+    if st.session_state.rangliste_r1:
+        with st.expander("📊 Tabelle / Rangliste nach Runde 1 anzeigen", expanded=False):
+            data_r1 = []
+            for idx, (spieler, s_stats) in enumerate(st.session_state.rangliste_r1, 1):
+                data_r1.append({
+                    "Platz": idx,
+                    "Spieler": spieler.split('(')[0].strip(),
+                    "Gewonnene Sätze": s_stats["saetze"],
+                    "Ball-Differenz": s_stats["diff"],
+                    "Eigene Punkte": s_stats["punkte"]
+                })
+            st.table(data_r1)
+
     with st.expander("📝 Ergebnisse Runde 1 eintragen", expanded=(st.session_state.spielplan_r2 is None)):
         with st.form("ergebnisse_r1_form"):
             tabs = st.tabs(list(st.session_state.spielplan_r1.keys()))
@@ -181,6 +201,7 @@ if st.session_state.spielplan_r1:
                             stats[p]["diff"] += ((s1_t2 + s2_t2) - (s1_t1 + s2_t1))
                             
                 sortierte_spieler = sorted(stats.items(), key=lambda x: (x[1]["saetze"], x[1]["diff"], x[1]["punkte"]), reverse=True)
+                st.session_state.rangliste_r1 = sortierte_spieler
                 st.session_state.spielplan_r2 = erstelle_runde_2_spielplan([s[0] for s in sortierte_spieler])
                 st.rerun()
 
@@ -190,6 +211,22 @@ if st.session_state.spielplan_r2:
     st.header("Spielplan: Runde 2 (Power Pools)")
     st.download_button("📄 Laufzettel R2 (PDF)", data=erstelle_laufzettel_pdf(st.session_state.spielplan_r2, "Runde 2"), file_name="Runde_2.pdf", mime="application/pdf", key="dl_r2")
     
+    # NEU: Pool-Tabellen für Runde 2 einblenden, sobald berechnet
+    if st.session_state.rangliste_r2:
+        with st.expander("📊 Pool-Ranglisten nach Runde 2 anzeigen", expanded=False):
+            for feld_name, sortierte_liste in st.session_state.rangliste_r2.items():
+                st.markdown(f"**📋 {feld_name}**")
+                data_r2 = []
+                for idx, (spieler, s_stats) in enumerate(sortierte_liste, 1):
+                    data_r2.append({
+                        "Pool-Platz": idx,
+                        "Spieler": spieler.split('(')[0].strip(),
+                        "Gewonnene Sätze": s_stats["saetze"],
+                        "Ball-Differenz": s_stats["diff"],
+                        "Eigene Punkte": s_stats["punkte"]
+                    })
+                st.table(data_r2)
+
     with st.expander("📝 Ergebnisse Runde 2 eintragen", expanded=(st.session_state.spielplan_r3 is None)):
         with st.form("ergebnisse_r2_form"):
             tabs_r2 = st.tabs(list(st.session_state.spielplan_r2.keys()))
@@ -206,8 +243,10 @@ if st.session_state.spielplan_r2:
                         with col4: st.session_state.ergebnisse_r2[f"{key_pfx}_s2_t2"] = st.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t2")
                         st.divider()
             
-            if st.form_submit_button("💾 Ergebnisse R2 speichern & Runde 3 berechnen"):
+            if st.form_submit_button("💾 Ergebnisse R2保存 & Runde 3 berechnen"):
                 r2_tabellen_pro_feld = {}
+                st.session_state.rangliste_r2 = {}
+                
                 for feld_name, spiele in st.session_state.spielplan_r2.items():
                     feld_spieler = set()
                     for spiel in spiele:
@@ -240,6 +279,7 @@ if st.session_state.spielplan_r2:
                             
                     sortiert = sorted(stats.items(), key=lambda x: (x[1]["saetze"], x[1]["diff"], x[1]["punkte"]), reverse=True)
                     r2_tabellen_pro_feld[feld_name] = [s[0] for s in sortiert]
+                    st.session_state.rangliste_r2[feld_name] = sortiert
                 
                 st.session_state.platz_17_bis_20 = r2_tabellen_pro_feld["Feld 5"]
                 st.session_state.spielplan_r3 = erstelle_runde_3_spielplan(r2_tabellen_pro_feld)
@@ -321,7 +361,6 @@ if st.session_state.endstand_tabelle:
     for i in range(20):
         platz = i + 1
         voller_name = st.session_state.endstand_tabelle[i]
-        
         name_ohne_klammer = voller_name.split('(')[0].strip()
         
         if platz == 1: text = f"🥇 **1. Platz:** {name_ohne_klammer}"
@@ -333,4 +372,20 @@ if st.session_state.endstand_tabelle:
         elif i < 8: col2.info(text)
         elif i < 12: col3.warning(text)
         elif i < 16: col4.error(text)
-        else: col5.write(text)
+        else:
+            # NEU: Schicke HTML-Highlight-Box für die Plätze 17 bis 20
+            col5.markdown(
+                f"<div style='background-color: #f0f2f6; padding: 10px; margin-bottom: 8px; border-radius: 5px; border-left: 5px solid #6c757d; font-weight: bold;'>{text}</div>", 
+                unsafe_allow_html=True
+            )
+            
+    # NEU: Zusammenfassende tabellarische Gesamt-Rangliste ganz unten
+    st.write("---")
+    st.subheader("📊 Offizielle Gesamt-Rangliste (Tabellarisch)")
+    data_final = []
+    for i, voller_name in enumerate(st.session_state.endstand_tabelle, 1):
+        data_final.append({
+            "Endplatzierung": f"{i}. Platz",
+            "Spieler": voller_name.split('(')[0].strip()
+        })
+    st.table(data_final)
