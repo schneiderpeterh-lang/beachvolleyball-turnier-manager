@@ -132,6 +132,7 @@ if st.sidebar.button("📋 Turnier neu starten"):
     st.session_state.ergebnisse_r1 = {}
     st.session_state.ergebnisse_r2 = {}
     st.session_state.ergebnisse_r3 = {}
+    st.rerun()
 
 # ================= RUNDE 1 =================
 if st.session_state.spielplan_r1:
@@ -238,4 +239,98 @@ if st.session_state.spielplan_r2:
                             stats[p]["diff"] += ((s1_t2 + s2_t2) - (s1_t1 + s2_t1))
                             
                     sortiert = sorted(stats.items(), key=lambda x: (x[1]["saetze"], x[1]["diff"], x[1]["punkte"]), reverse=True)
-                    r2_tabellen_pro_
+                    r2_tabellen_pro_feld[feld_name] = [s[0] for s in sortiert]
+                
+                st.session_state.platz_17_bis_20 = r2_tabellen_pro_feld["Feld 5"]
+                st.session_state.spielplan_r3 = erstelle_runde_3_spielplan(r2_tabellen_pro_feld)
+                st.rerun()
+
+# ================= RUNDE 3 =================
+if st.session_state.spielplan_r3:
+    st.divider()
+    st.header("Spielplan: Runde 3 (Platzierungen)")
+    st.download_button("📄 Laufzettel R3 (PDF)", data=erstelle_laufzettel_pdf(st.session_state.spielplan_r3, "Runde 3"), file_name="Runde_3.pdf", mime="application/pdf", key="dl_r3")
+    
+    with st.expander("📝 Ergebnisse Runde 3 eintragen", expanded=(st.session_state.endstand_tabelle is None)):
+        with st.form("ergebnisse_r3_form"):
+            tabs_r3 = st.tabs(list(st.session_state.spielplan_r3.keys()))
+            for idx, (feld_name, spiele) in enumerate(st.session_state.spielplan_r3.items()):
+                with tabs_r3[idx]:
+                    for i, spiel in enumerate(spiele):
+                        st.markdown(f"**Spiel {i+1}: {spiel['Team 1 Text']} vs {spiel['Team 2 Text']}**")
+                        col1, col2, col3, col4 = st.columns(4)
+                        key_pfx = f"r3_{feld_name}_spiel{i}"
+                        
+                        with col1: st.session_state.ergebnisse_r3[f"{key_pfx}_s1_t1"] = st.number_input("Satz 1 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t1")
+                        with col2: st.session_state.ergebnisse_r3[f"{key_pfx}_s1_t2"] = st.number_input("Satz 1 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s1_t2")
+                        with col3: st.session_state.ergebnisse_r3[f"{key_pfx}_s2_t1"] = st.number_input("Satz 2 Team 1", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t1")
+                        with col4: st.session_state.ergebnisse_r3[f"{key_pfx}_s2_t2"] = st.number_input("Satz 2 Team 2", min_value=0, max_value=30, value=0, key=f"{key_pfx}_s2_t2")
+                        st.divider()
+
+            if st.form_submit_button("🏆 Ergebnisse R3 speichern & Endstand berechnen"):
+                finale_platzierungen = []
+                
+                for f_idx in range(1, 5):
+                    feld_name = f"Feld {f_idx}"
+                    spiele = st.session_state.spielplan_r3[feld_name]
+                    
+                    feld_spieler = set()
+                    for spiel in spiele:
+                        for p in spiel["Team 1 Spieler"]: feld_spieler.add(p)
+                        for p in spiel["Team 2 Spieler"]: feld_spieler.add(p)
+                        
+                    stats = {p: {"saetze": 0, "diff": 0, "punkte": 0} for p in feld_spieler}
+                    for i, spiel in enumerate(spiele):
+                        key_pfx = f"r3_{feld_name}_spiel{i}"
+                        s1_t1 = st.session_state.ergebnisse_r3[f"{key_pfx}_s1_t1"]
+                        s1_t2 = st.session_state.ergebnisse_r3[f"{key_pfx}_s1_t2"]
+                        s2_t1 = st.session_state.ergebnisse_r3[f"{key_pfx}_s2_t1"]
+                        s2_t2 = st.session_state.ergebnisse_r3[f"{key_pfx}_s2_t2"]
+                        
+                        if s1_t1 > s1_t2: 
+                            for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
+                        elif s1_t2 > s1_t1: 
+                            for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
+                        if s2_t1 > s2_t2: 
+                            for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
+                        elif s2_t2 > s2_t1: 
+                            for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
+                        
+                        for p in spiel["Team 1 Spieler"]:
+                            stats[p]["punkte"] += (s1_t1 + s2_t1)
+                            stats[p]["diff"] += ((s1_t1 + s2_t1) - (s1_t2 + s2_t2))
+                        for p in spiel["Team 2 Spieler"]:
+                            stats[p]["punkte"] += (s1_t2 + s2_t2)
+                            stats[p]["diff"] += ((s1_t2 + s2_t2) - (s1_t1 + s2_t1))
+                            
+                    sortiert = sorted(stats.items(), key=lambda x: (x[1]["saetze"], x[1]["diff"], x[1]["punkte"]), reverse=True)
+                    finale_platzierungen.extend([s[0] for s in sortiert])
+                
+                finale_platzierungen.extend(st.session_state.platz_17_bis_20)
+                st.session_state.endstand_tabelle = finale_platzierungen
+                st.rerun()
+
+# ================= ENDSTAND / SIEGEREHRUNG =================
+if st.session_state.endstand_tabelle:
+    st.balloons()
+    st.divider()
+    st.header("🏆 Offizieller Endstand des Turniers 🏆")
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    for i in range(20):
+        platz = i + 1
+        voller_name = st.session_state.endstand_tabelle[i]
+        
+        name_ohne_klammer = voller_name.split('(')[0].strip()
+        
+        if platz == 1: text = f"🥇 **1. Platz:** {name_ohne_klammer}"
+        elif platz == 2: text = f"🥈 **2. Platz:** {name_ohne_klammer}"
+        elif platz == 3: text = f"🥉 **3. Platz:** {name_ohne_klammer}"
+        else: text = f"**{platz}. Platz:** {name_ohne_klammer}"
+        
+        if i < 4: col1.success(text)
+        elif i < 8: col2.info(text)
+        elif i < 12: col3.warning(text)
+        elif i < 16: col4.error(text)
+        else: col5.write(text)
