@@ -56,7 +56,14 @@ def save_global_state_to_sheets(sh):
 
 # --- KERNLOGIK TURNIER ---
 def kurzname(spieler):
-    return spieler.split('(')[0].strip()
+    # Entfernt die Klammer und Nummer am Ende
+    name_clean = spieler.split('(')[0].strip()
+    # Teilt den Namen in einzelne Wörter auf
+    teile = name_clean.split()
+    if len(teile) > 1:
+        # Nimmt den ersten Buchstaben des ersten Wortes + Punkt + den Rest des Namens
+        return f"{teile[0][0]}. {' '.join(teile[1:])}"
+    return name_clean # Falls nur ein einziges Wort eingegeben wurde
 
 def generiere_kotb_spiele(gruppe):
     return [
@@ -414,8 +421,8 @@ if st.session_state.spielplan_r3:
                     for p in spiel["Team 1 Spieler"]: stats[p]["punkte"] += (s1_t1 + s2_t1); stats[p]["diff"] += ((s1_t1 + s2_t1) - (s1_t2 + s2_t2))
                     for p in spiel["Team 2 Spieler"]: stats[p]["punkte"] += (s1_t2 + s2_t2); stats[p]["diff"] += ((s1_t2 + s2_t2) - (s1_t1 + s2_t1))
                         
-            sortiert = sorted(stats.items(), key=lambda x: (x[1]["saetze"], x[1]["diff"], x[1]["punkte"]), reverse=True)
-            finale_platzierungen.extend([s[0] for s in sortiert])
+                sortiert = sorted(stats.items(), key=lambda x: (x[1]["saetze"], x[1]["diff"], x[1]["punkte"]), reverse=True)
+                finale_platzierungen.extend([s[0] for s in sortiert])
             
             finale_platzierungen.extend(st.session_state.platz_17_bis_20)
             st.session_state.endstand_tabelle = finale_platzierungen
