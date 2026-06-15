@@ -143,18 +143,21 @@ if st.session_state.spielplan_r1:
     st.header("Spielplan: Runde 1")
     st.download_button("📄 Laufzettel R1 (PDF)", data=erstelle_laufzettel_pdf(st.session_state.spielplan_r1, "Runde 1"), file_name="Runde_1.pdf", mime="application/pdf", key="dl_r1")
     
+    # NEU: Sofort sichtbare Auswertungstabelle für Runde 1
     if st.session_state.rangliste_r1:
-        with st.expander("📊 Tabelle / Rangliste nach Runde 1 anzeigen", expanded=False):
-            data_r1 = []
-            for idx, (spieler, s_stats) in enumerate(st.session_state.rangliste_r1, 1):
-                data_r1.append({
-                    "Platz": idx,
-                    "Spieler": spieler.split('(')[0].strip(),
-                    "Gewonnene Sätze": s_stats["saetze"],
-                    "Ball-Differenz": s_stats["diff"],
-                    "Eigene Punkte": s_stats["punkte"]
-                })
-            st.table(data_r1)
+        st.success("✅ Ergebnisse für Runde 1 sind gespeichert!")
+        st.subheader("📊 Auswertungstabelle: Stand nach Runde 1")
+        data_r1 = []
+        for idx, (spieler, s_stats) in enumerate(st.session_state.rangliste_r1, 1):
+            data_r1.append({
+                "Platz": idx,
+                "Spieler": spieler.split('(')[0].strip(),
+                "Gewonnene Sätze": s_stats["saetze"],
+                "Ball-Differenz": s_stats["diff"],
+                "Eigene Punkte": s_stats["punkte"]
+            })
+        st.dataframe(data_r1, use_container_width=True)
+        st.write("---")
 
     with st.expander("📝 Ergebnisse Runde 1 eintragen", expanded=(st.session_state.spielplan_r2 is None)):
         with st.form("ergebnisse_r1_form"):
@@ -208,20 +211,25 @@ if st.session_state.spielplan_r2:
     st.header("Spielplan: Runde 2 (Power Pools)")
     st.download_button("📄 Laufzettel R2 (PDF)", data=erstelle_laufzettel_pdf(st.session_state.spielplan_r2, "Runde 2"), file_name="Runde_2.pdf", mime="application/pdf", key="dl_r2")
     
+    # NEU: Sofort sichtbare Pool-Tabellen für Runde 2
     if st.session_state.rangliste_r2:
-        with st.expander("📊 Pool-Ranglisten nach Runde 2 anzeigen", expanded=False):
-            for feld_name, sortierte_liste in st.session_state.rangliste_r2.items():
-                st.markdown(f"**📋 {feld_name}**")
+        st.success("✅ Ergebnisse für Runde 2 sind gespeichert!")
+        st.subheader("📊 Auswertungstabelle: Pools nach Runde 2")
+        
+        spalten_r2 = st.columns(5)
+        for idx, (feld_name, sortierte_liste) in enumerate(st.session_state.rangliste_r2.items()):
+            with spalten_r2[idx]:
+                st.markdown(f"**{feld_name}**")
                 data_r2 = []
-                for idx, (spieler, s_stats) in enumerate(sortierte_liste, 1):
+                for p_idx, (spieler, s_stats) in enumerate(sortierte_liste, 1):
                     data_r2.append({
-                        "Pool-Platz": idx,
+                        "Rang": p_idx,
                         "Spieler": spieler.split('(')[0].strip(),
-                        "Gewonnene Sätze": s_stats["saetze"],
-                        "Ball-Differenz": s_stats["diff"],
-                        "Eigene Punkte": s_stats["punkte"]
+                        "Sätze": s_stats["saetze"],
+                        "Diff": s_stats["diff"]
                     })
-                st.table(data_r2)
+                st.dataframe(data_r2, use_container_width=True)
+        st.write("---")
 
     with st.expander("📝 Ergebnisse Runde 2 eintragen", expanded=(st.session_state.spielplan_r3 is None)):
         with st.form("ergebnisse_r2_form"):
@@ -369,7 +377,6 @@ if st.session_state.endstand_tabelle:
         elif i < 12: col3.warning(text)
         elif i < 16: col4.error(text)
         else:
-            # HTML mag keine Markdown-Sternchen. Wir definieren den Text hier sauber ohne "**"
             html_text = f"{platz}. Platz: {name_ohne_klammer}"
             col5.markdown(
                 f"<div style='background-color: #4a148c; color: #ffffff; padding: 10px; margin-bottom: 8px; border-radius: 5px; border-left: 5px solid #ab47bc; font-weight: bold;'>{html_text}</div>", 
@@ -377,11 +384,11 @@ if st.session_state.endstand_tabelle:
             )
             
     st.write("---")
-    st.subheader("📊 Offizielle Gesamt-Rangliste (Tabellarisch)")
+    st.subheader("📊 Offizielle Gesamt-Rangliste")
     data_final = []
     for i, voller_name in enumerate(st.session_state.endstand_tabelle, 1):
         data_final.append({
             "Endplatzierung": f"{i}. Platz",
             "Spieler": voller_name.split('(')[0].strip()
         })
-    st.table(data_final)
+    st.dataframe(data_final, use_container_width=True)
