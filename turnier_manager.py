@@ -43,7 +43,7 @@ def save_global_state_to_sheets(sh):
     
     keys_to_persist = [
         "teilnehmer", "spielplan_r1", "spielplan_r2", "spielplan_r3",
-        "endstand_tabelle", "platz_17_bis_20", "rangliste_r1", "rangliste_r2", "reset_id"
+        "endstand_tabelle", "platz_17_bis_20", "ausgeschieden", "rangliste_r1", "rangliste_r2", "reset_id"
     ]
     
     rows = []
@@ -56,14 +56,11 @@ def save_global_state_to_sheets(sh):
 
 # --- KERNLOGIK TURNIER ---
 def kurzname(spieler):
-    # Entfernt die Klammer und Nummer am Ende
     name_clean = spieler.split('(')[0].strip()
-    # Teilt den Namen in einzelne Wörter auf
     teile = name_clean.split()
     if len(teile) > 1:
-        # Nimmt den ersten Buchstaben des ersten Wortes + Punkt + den Rest des Namens
         return f"{teile[0][0]}. {' '.join(teile[1:])}"
-    return name_clean # Falls nur ein einziges Wort eingegeben wurde
+    return name_clean
 
 def generiere_kotb_spiele(gruppe):
     return [
@@ -82,32 +79,42 @@ def generiere_kotb_spiele(gruppe):
     ]
 
 def erstelle_runden_spielplan_r1(spieler_liste):
-    felder = [[], [], [], [], []]
-    for i in range(20):
-        spieler = spieler_liste[i]
-        durchgang = i // 5 
-        if durchgang % 2 == 0: feld_index = i % 5
-        else: feld_index = 4 - (i % 5)
-        felder[feld_index].append(spieler)
-        
+    num = len(spieler_liste)
+    if num == 20:
+        felder = [[], [], [], [], []]
+        for i in range(20):
+            spieler = spieler_liste[i]
+            durchgang = i // 5 
+            if durchgang % 2 == 0: feld_index = i % 5
+            else: feld_index = 4 - (i % 5)
+            felder[feld_index].append(spieler)
+    elif num == 16:
+        felder = [[], [], [], []]
+        for i in range(16):
+            spieler = spieler_liste[i]
+            durchgang = i // 4 
+            if durchgang % 2 == 0: feld_index = i % 4
+            else: feld_index = 3 - (i % 4)
+            felder[feld_index].append(spieler)
+            
     runden_plan = {}
     for index, gruppe in enumerate(felder):
         runden_plan[f"Feld {index + 1}"] = generiere_kotb_spiele(gruppe)
     return runden_plan
 
 def erstelle_runde_2_spielplan(spieler_liste):
-    top_16 = spieler_liste[:16]   
-    bottom_4 = spieler_liste[16:] 
-    
+    num = len(spieler_liste)
     felder = [[], [], [], []]
     for i in range(16):
-        spieler = top_16[i]
+        spieler = spieler_liste[i]
         durchgang = i // 4 
         if durchgang % 2 == 0: feld_index = i % 4       
         else: feld_index = 3 - (i % 4) 
         felder[feld_index].append(spieler)
         
-    felder.append(bottom_4)
+    if num == 20:
+        felder.append(spieler_liste[16:20])
+        
     runden_plan = {}
     for index, gruppe in enumerate(felder):
         runden_plan[f"Feld {index + 1}"] = generiere_kotb_spiele(gruppe)
@@ -148,7 +155,7 @@ def erstelle_laufzettel_pdf(spielplan, runden_name):
 
 # --- INITIALISIERUNG & DATENBANK-VERBINDUNG ---
 st.set_page_config(layout="wide")
-st.title("🏐 King of the Beach - Turnier Manager")
+st.title("🏐 King of the Beach - Cloud Manager")
 
 client = get_gspread_client()
 sh = None
@@ -159,11 +166,13 @@ if client:
         st.error(f"Google Sheet 'Beachvolleyball_Turnier' nicht gefunden. Bitte Freigabe prüfen! Fehler: {e}")
 
 if 'reset_id' not in st.session_state: st.session_state.reset_id = 0
-if 'teilnehmer' not in st.session_state: st.session_state.teilnehmer = [f"Spieler {i} ({i})" for i in range(1, 21)]
+# Standardmäßig auf exakt 16 Teilnehmer (Perfekter 4-Feld-Modus) initialisiert
+if 'teilnehmer' not in st.session_state: st.session_state.teilnehmer = [f"Spieler {i} ({i})" for i in range(1, 17)]
 if 'spielplan_r1' not in st.session_state: st.session_state.spielplan_r1 = None
 if 'spielplan_r2' not in st.session_state: st.session_state.spielplan_r2 = None
 if 'spielplan_r3' not in st.session_state: st.session_state.spielplan_r3 = None
 if 'endstand_tabelle' not in st.session_state: st.session_state.endstand_tabelle = None
+if 'ausgeschieden' not in st.session_state: st.session_state.ausgeschieden = []
 if 'platz_17_bis_20' not in st.session_state: st.session_state.platz_17_bis_20 = []
 if 'rangliste_r1' not in st.session_state: st.session_state.rangliste_r1 = None
 if 'rangliste_r2' not in st.session_state: st.session_state.rangliste_r2 = None
@@ -192,17 +201,29 @@ if uploaded_file is not None:
             elif len(teile) == 2: anzeige_name = f"{teile[1].replace('\"', '').strip()} ({teile[0].replace('\"', '').strip()})"
             else: anzeige_name = teile[0].replace('"', '').strip()
             importierte_namen.append(anzeige_name)
-        if len(importierte_namen) == 20: 
+            
+        if len(importierte_namen) in [16, 17, 18, 19, 20]: 
             st.session_state.teilnehmer = importierte_namen
-            st.sidebar.success("Setzliste lokal geladen. Klicke auf 'Reset' zum Hochladen.")
+            st.sidebar.success(f"{len(importierte_namen)} Teilnehmer lokal geladen. Klicke auf 'Reset' zum Starten.")
+        else:
+            st.sidebar.error(f"Die CSV-Datei muss zwischen 16 und 20 Teilnehmer enthalten! Aktuell: {len(importierte_namen)}")
     except Exception as e: st.sidebar.error(f"Fehler: {e}")
 
 if st.sidebar.button("📋 Turnier neu starten / Reset"):
     st.session_state.reset_id = st.session_state.get('reset_id', 0) + 1
-    st.session_state.spielplan_r1 = erstelle_runden_spielplan_r1(st.session_state.teilnehmer)
+    num_players = len(st.session_state.teilnehmer)
+    
+    if num_players in [16, 20]:
+        st.session_state.spielplan_r1 = erstelle_runden_spielplan_r1(st.session_state.teilnehmer)
+    else:
+        freilose = num_players - 16
+        aktive_spieler = st.session_state.teilnehmer[freilose:]
+        st.session_state.spielplan_r1 = erstelle_runden_spielplan_r1(aktive_spieler)
+        
     st.session_state.spielplan_r2 = None
     st.session_state.spielplan_r3 = None
     st.session_state.endstand_tabelle = None
+    st.session_state.ausgeschieden = []
     st.session_state.platz_17_bis_20 = []
     st.session_state.rangliste_r1 = None
     st.session_state.rangliste_r2 = None
@@ -216,6 +237,14 @@ if st.sidebar.button("📋 Turnier neu starten / Reset"):
 # ================= RUNDE 1 =================
 if st.session_state.spielplan_r1:
     st.header("Spielplan: Runde 1")
+    
+    num_players = len(st.session_state.teilnehmer)
+    if 16 < num_players < 20:
+        freilose_count = num_players - 16
+        freilose_spieler = st.session_state.teilnehmer[:freilose_count]
+        namen = ", ".join([kurzname(s) for s in freilose_spieler])
+        st.info(f"⏸️ **Freilos in Runde 1:** {namen} (Starten direkt in Runde 2)")
+    
     st.download_button("📄 Laufzettel R1 (PDF)", data=erstelle_laufzettel_pdf(st.session_state.spielplan_r1, "Runde 1"), file_name="Runde_1.pdf", mime="application/pdf", key="dl_r1")
     
     if st.session_state.rangliste_r1:
@@ -224,6 +253,10 @@ if st.session_state.spielplan_r1:
         for idx, (spieler, s_stats) in enumerate(st.session_state.rangliste_r1, 1):
             data_r1.append({"Platz": idx, "Spieler": spieler.split('(')[0].strip(), "Gewonnene Sätze": s_stats["saetze"], "Ball-Differenz": s_stats["diff"], "Eigene Punkte": s_stats["punkte"]})
         st.dataframe(data_r1, use_container_width=True)
+        
+        if 16 < num_players < 20 and st.session_state.ausgeschieden:
+            namen_aus = ", ".join([kurzname(s) for s in st.session_state.ausgeschieden])
+            st.error(f"❌ **Ausgeschieden:** {namen_aus} (Scheiden für Runde 2 aus)")
 
     with st.expander("📝 Ergebnisse Runde 1 eintragen", expanded=(st.session_state.spielplan_r2 is None)):
         with st.form("ergebnisse_r1_form"):
@@ -250,7 +283,13 @@ if st.session_state.spielplan_r1:
             st.success("💾 Zwischenstand für Runde 1 erfolgreich in der Cloud gesichert!")
             
         if next_round_r1:
-            stats = {p: {"saetze": 0, "diff": 0, "punkte": 0} for p in st.session_state.teilnehmer}
+            if num_players in [16, 20]:
+                aktive_spieler_auswertung = st.session_state.teilnehmer
+            else:
+                freilose_count = num_players - 16
+                aktive_spieler_auswertung = st.session_state.teilnehmer[freilose_count:]
+                
+            stats = {p: {"saetze": 0, "diff": 0, "punkte": 0} for p in aktive_spieler_auswertung}
             for feld_name, spiele in st.session_state.spielplan_r1.items():
                 for i, spiel in enumerate(spiele):
                     key_pfx = f"r1_{feld_name}_spiel{i}"
@@ -263,7 +302,6 @@ if st.session_state.spielplan_r1:
                         for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
                     elif s1_t2 > s1_t1:
                         for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
-                    
                     if s2_t1 > s2_t2:
                         for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
                     elif s2_t2 > s2_t1:
@@ -274,7 +312,16 @@ if st.session_state.spielplan_r1:
                         
             sortierte_spieler = sorted(stats.items(), key=lambda x: (x[1]["saetze"], x[1]["diff"], x[1]["punkte"]), reverse=True)
             st.session_state.rangliste_r1 = sortierte_spieler
-            st.session_state.spielplan_r2 = erstelle_runde_2_spielplan([s[0] for s in sortierte_spieler])
+            
+            if num_players in [16, 20]:
+                st.session_state.spielplan_r2 = erstelle_runde_2_spielplan([s[0] for s in sortierte_spieler])
+            else:
+                freilose_count = num_players - 16
+                st.session_state.ausgeschieden = [s[0] for s in sortierte_spieler[-freilose_count:]]
+                gewinner_spieler = [s[0] for s in sortierte_spieler[:-freilose_count]]
+                freilose_spieler = st.session_state.teilnehmer[:freilose_count]
+                st.session_state.spielplan_r2 = erstelle_runde_2_spielplan(freilose_spieler + gewinner_spieler)
+                
             if sh: save_global_state_to_sheets(sh)
             st.rerun()
 
@@ -284,9 +331,12 @@ if st.session_state.spielplan_r2:
     st.header("Spielplan: Runde 2 (Power Pools)")
     st.download_button("📄 Laufzettel R2 (PDF)", data=erstelle_laufzettel_pdf(st.session_state.spielplan_r2, "Runde 2"), file_name="Runde_2.pdf", mime="application/pdf", key="dl_r2")
     
+    num_players = len(st.session_state.teilnehmer)
+    
     if st.session_state.rangliste_r2:
         st.subheader("📊 Auswertungstabelle: Pools nach Runde 2")
-        spalten_r2 = st.columns(5)
+        spalten_anzahl = 5 if num_players == 20 else 4
+        spalten_r2 = st.columns(spalten_anzahl)
         for idx, (feld_name, sortierte_liste) in enumerate(st.session_state.rangliste_r2.items()):
             with spalten_r2[idx]:
                 st.markdown(f"**{feld_name}**")
@@ -341,7 +391,6 @@ if st.session_state.spielplan_r2:
                         for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
                     elif s1_t2 > s1_t1:
                         for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
-                    
                     if s2_t1 > s2_t2:
                         for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
                     elif s2_t2 > s2_t1:
@@ -354,7 +403,9 @@ if st.session_state.spielplan_r2:
                 r2_tabellen_pro_feld[feld_name] = [s[0] for s in sortiert]
                 st.session_state.rangliste_r2[feld_name] = sortiert
             
-            st.session_state.platz_17_bis_20 = r2_tabellen_pro_feld["Feld 5"]
+            if num_players == 20 and "Feld 5" in r2_tabellen_pro_feld:
+                st.session_state.platz_17_bis_20 = r2_tabellen_pro_feld["Feld 5"]
+                
             st.session_state.spielplan_r3 = erstelle_runde_3_spielplan(r2_tabellen_pro_feld)
             if sh: save_global_state_to_sheets(sh)
             st.rerun()
@@ -412,7 +463,6 @@ if st.session_state.spielplan_r3:
                         for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
                     elif s1_t2 > s1_t1:
                         for p in spiel["Team 2 Spieler"]: stats[p]["saetze"] += 1
-                    
                     if s2_t1 > s2_t2:
                         for p in spiel["Team 1 Spieler"]: stats[p]["saetze"] += 1
                     elif s2_t2 > s2_t1:
@@ -424,7 +474,12 @@ if st.session_state.spielplan_r3:
                 sortiert = sorted(stats.items(), key=lambda x: (x[1]["saetze"], x[1]["diff"], x[1]["punkte"]), reverse=True)
                 finale_platzierungen.extend([s[0] for s in sortiert])
             
-            finale_platzierungen.extend(st.session_state.platz_17_bis_20)
+            num_players = len(st.session_state.teilnehmer)
+            if num_players == 20:
+                finale_platzierungen.extend(st.session_state.platz_17_bis_20)
+            elif num_players > 16:
+                finale_platzierungen.extend(st.session_state.ausgeschieden)
+                
             st.session_state.endstand_tabelle = finale_platzierungen
             if sh: save_global_state_to_sheets(sh)
             st.rerun()
@@ -436,7 +491,9 @@ if st.session_state.endstand_tabelle:
     st.header("🏆 Offizieller Endstand des Turniers 🏆")
     
     col1, col2, col3, col4, col5 = st.columns(5)
-    for i in range(20):
+    num_players = len(st.session_state.endstand_tabelle)
+    
+    for i in range(num_players):
         platz = i + 1
         voller_name = st.session_state.endstand_tabelle[i]
         name_ohne_klammer = voller_name.split('(')[0].strip()
